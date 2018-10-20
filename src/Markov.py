@@ -1,19 +1,25 @@
-# TODO I think that the generating can be spead up by having a better
-# key value store so lets work on that
-
-from SwankinsStorage import Storage, MessageRecord,\
-                            WordPairRecord, SourceRecord
-import logging
+import random
+from collections import defaultdict
 
 _TRANSLATION_TABLE = str.maketrans({
-    # '.':'',
+    '.':'',
     # '?':'',
     # ' ': '',
     ',': '',
+    '(': '',
+    ')': '',
+    '{': '',
+    '}': '',
+    '[': '',
+    ']': '',
+    '|': '',
     '"': '',
     ':': '',
     ';': '',
     "'": '',
+    '/': '',
+    '_': '',
+    '\\': '',
     '-': ' ',
     '\n': ' ',
     '\t': ' ',
@@ -23,16 +29,13 @@ _TRANSLATION_TABLE = str.maketrans({
 class Markov():
     """The chain generating part of the program!"""
 
-    def __init__(self, storage=None, sources=None):
-        if not isinstance(storage, Storage):
-            pass  # TODO Throw an error
-        self.storage = storage
+    def __init__(self, sources=None):
+        self.memory = defaultdict(list)
         self.sources = sources
         self._read_sources(sources)
 
     def messages(self):
         for chain in self._chains():
-            self.storage.store(MessageRecord(message=chain))
             yield chain
 
     def _stop_condition(self, words):
@@ -41,19 +44,26 @@ class Markov():
         return False
 
     def _get_starting_word(self):
-        return self.storage.get_starting_word()
+        return random.choice(list(self.memory.keys()))
 
     def _get_next_word(self, word):
-        return self.storage.get_next_word(word)
+        if len(self.memory[word]) == 0:
+            return None
+        else:
+            return random.choice(self.memory[word])
 
     def _chains(self):
         while True:
             word = self._get_starting_word()
-            chain = (word + ' ')
+            chain = word + ' '
 
             while not self._stop_condition(chain):
                 word = self._get_next_word(word)
-                chain += (word + ' ')
+
+                if word is None:
+                    break
+
+                chain += word + ' '
 
             # [:-1] to remove the space at the end
             yield chain.capitalize()[:-1]
@@ -62,10 +72,8 @@ class Markov():
         with open(filename, 'r') as fin:
             source = fin.read()
 
-            words = [x for x in source.translate(_TRANSLATION_TABLE).split(' ')
-                     if x is not ' ' and x is not '']
-
-            del(source)  # Free the file asap
+            words = [word for word in source.translate(_TRANSLATION_TABLE).split(' ')
+                     if word is not ' ' and word is not '']
 
         return words
 
@@ -78,20 +86,10 @@ class Markov():
             yield key, val
 
     def _read_source(self, filename):
-        pairs = WordPairRecord()
-
         for key, val in self._fetch_pair(filename):
-            pairs.add(this=key, next=val)
+            self.memory[key] += [val]
 
-        self.storage.store(pairs)
-
-    # TODO this will be the MP function it just needs to distribute and join
-    # the information to and from _read_sources
     def _read_sources(self, filenames):
-        scanned_sources = self.storage.get_sources()
-
         for file in filenames:
-            if file not in scanned_sources:
-                self._read_source(file)
-                self.storage.store(SourceRecord(source_name=file))
-                logging.debug(f'Read [{file}]')
+            self._read_source(file)
+

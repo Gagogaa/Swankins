@@ -1,2 +1,1 @@
-# gutenburg-generator
-# TODO I think I'll just rewrite this...
+# Generates markov chains from books
